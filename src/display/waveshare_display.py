@@ -103,12 +103,18 @@ class WaveshareDisplay(AbstractDisplay):
         if not image:
             raise ValueError(f"No image provided.")
 
-        # Check if partial refresh is requested
+        # Check if partial refresh is requested (supports both single region and multiple regions)
         partial_refresh_region = None
+        partial_refresh_regions = None
+        
         for setting in image_settings:
-            if isinstance(setting, dict) and 'partial_refresh' in setting:
-                partial_refresh_region = setting['partial_refresh']
-                break
+            if isinstance(setting, dict):
+                if 'partial_refresh_regions' in setting:
+                    partial_refresh_regions = setting['partial_refresh_regions']
+                    break
+                elif 'partial_refresh' in setting:
+                    partial_refresh_region = setting['partial_refresh']
+                    break
 
         # Assume device was in sleep mode.
         self.epd_display_init()
@@ -116,23 +122,26 @@ class WaveshareDisplay(AbstractDisplay):
         # Check if display supports partial refresh
         has_partial_refresh = hasattr(self.epd_display, 'display_Partial') or hasattr(self.epd_display, 'displayPartial')
 
-        if partial_refresh_region and has_partial_refresh:
-            # Partial refresh mode
-            x = partial_refresh_region.get('x', 0)
-            y = partial_refresh_region.get('y', 0)
-            width = partial_refresh_region.get('width', self.epd_display.width)
-            height = partial_refresh_region.get('height', self.epd_display.height)
-            
-            x_end = x + width
-            y_end = y + height
-            
-            logger.info(f"Performing partial refresh: region ({x},{y}) to ({x_end},{y_end})")
-            
+        # Handle multiple regions or single region partial refresh
+        if (partial_refresh_regions or partial_refresh_region) and has_partial_refresh:
             # Use the appropriate method name
             display_partial_method = getattr(self.epd_display, 'display_Partial', getattr(self.epd_display, 'displayPartial', None))
             
             if display_partial_method:
-                display_partial_method(self.epd_display.getbuffer(image), x, y, x_end, y_end)
+                # Convert single region to list for uniform handling
+                regions = partial_refresh_regions if partial_refresh_regions else [partial_refresh_region]
+                
+                for region in regions:
+                    x = region.get('x', 0)
+                    y = region.get('y', 0)
+                    width = region.get('width', self.epd_display.width)
+                    height = region.get('height', self.epd_display.height)
+                    
+                    x_end = x + width
+                    y_end = y + height
+                    
+                    logger.info(f"Performing partial refresh: region ({x},{y}) to ({x_end},{y_end})")
+                    display_partial_method(self.epd_display.getbuffer(image), x, y, x_end, y_end)
             else:
                 logger.warning("Partial refresh not supported, falling back to full refresh")
                 self.epd_display.Clear()

@@ -9,15 +9,29 @@ The plugin supports custom location (latitude/longitude), calculation methods, a
 Partial Refresh Support:
 ----------------------
 For Waveshare e-ink displays that support partial refresh (like epd7in5_V2), this plugin
-is configured to only refresh the top portion of the screen where the current time is displayed.
-This reduces the flickering effect and extends the display lifespan.
+uses intelligent differential refresh to minimize screen flicker and wear.
 
-The partial refresh region is defined in plugin-info.json:
-- x, y: Top-left corner of the refresh region (in pixels)
-- width, height: Dimensions of the refresh region
-- Default: (0, 0, 400, 150) - covers the current time area at the top
+**Differential Refresh Algorithm:**
+The plugin compares each new image with the previous one pixel-by-pixel to detect exactly
+what changed. It then calculates the minimal bounding box(es) around changed content and
+only refreshes those specific regions.
 
-Note: Full refresh still occurs periodically to prevent ghosting.
+For example:
+- Time changes from "5:20 pm" to "5:21 pm": Only the "0→1" digit area refreshes
+- Prayer time becomes active: Only that specific row refreshes
+- Date changes at midnight: Full screen refresh for new prayer times
+
+**Benefits:**
+- Minimal flicker (only changed areas flash)
+- Faster updates (less data to transfer)
+- Extended display lifespan (fewer pixels refreshed per update)
+- Automatic adaptation to what actually changed
+
+**Fallback Configuration:**
+If differential detection fails or it's the first run, falls back to the region
+defined in plugin-info.json (default: left 240px column for vertical orientation).
+
+Note: Full refresh still occurs when the date changes to update all prayer times.
 
 Flow:
 
@@ -27,15 +41,16 @@ Flow:
 """
 
 from plugins.base_plugin.base_plugin import BasePlugin
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageChops
 import logging
 import os
 import threading
 import subprocess
 from datetime import datetime, date, time, timedelta
-from typing import Dict, Any
+from typing import Dict, Any, List, Tuple
 import praytimes
 import pytz
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +60,7 @@ class Azan(BasePlugin):
     _stop_monitoring = False
     _last_played_prayer = None
     _last_date_displayed = None  # Track the last date we displayed
+    _previous_image = None  # Store previous image for differential refresh
 
     def generate_settings_template(self) -> Dict[str, Any]:
         template_params = super().generate_settings_template()
@@ -97,6 +113,23 @@ class Azan(BasePlugin):
 
         # Render the prayer timings as an image
         image = self._render_timings_image(timings_data, width, height, date_to_fetch)
+        
+        # Calculate differential refresh regions if we have a previous image
+        if not date_changed and Azan._previous_image is not None:
+            try:
+                changed_regions = self._detect_changed_regions(Azan._previous_image, image)
+                if changed_regions:
+                    logger.info(f"Detected {len(changed_regions)} changed region(s) for differential refresh")
+                    # Update image_settings with multiple partial refresh regions
+                    self.config["image_settings"] = [{"partial_refresh_regions": changed_regions}]
+                else:
+                    logger.info("No changes detected, skipping refresh")
+            except Exception as e:
+                logger.error(f"Error detecting changed regions: {e}", exc_info=True)
+                # Fall back to configured partial refresh
+        
+        # Store current image for next comparison
+        Azan._previous_image = image.copy()
         
         # Restore original image settings if we temporarily changed them
         if original_image_settings is not None:
@@ -333,6 +366,84 @@ class Azan(BasePlugin):
                 logger.error(f"Error in prayer monitoring thread: {str(e)}")
                 import time
                 time.sleep(10)
+    
+    def _detect_changed_regions(self, previous_image: Image.Image, current_image: Image.Image, 
+                                 min_box_size: int = 32, padding: int = 8) -> List[Dict[str, int]]:
+        """
+        Detect rectangular regions where pixels have changed between two images.
+        
+        Args:
+            previous_image: The previous rendered image
+            current_image: The current rendered image  
+            min_box_size: Minimum size for a bounding box (both width and height)
+            padding: Extra pixels to add around detected changes
+            
+        Returns:
+            List of dicts with keys: x, y, width, height
+        """
+        # Ensure images are the same size
+        if previous_image.size != current_image.size:
+            logger.warning("Image sizes don't match, cannot perform differential refresh")
+            return []
+        
+        # Convert to grayscale for comparison
+        prev_gray = previous_image.convert('L')
+        curr_gray = current_image.convert('L')
+        
+        # Calculate pixel difference
+        diff = ImageChops.difference(prev_gray, curr_gray)
+        
+        # Convert to numpy array for easier processing
+        diff_array = np.array(diff)
+        
+        # Find all pixels that changed (non-zero difference)
+        changed_pixels = np.where(diff_array > 0)
+        
+        if len(changed_pixels[0]) == 0:
+            return []  # No changes detected
+        
+        # Get bounding box of all changes
+        min_y, max_y = changed_pixels[0].min(), changed_pixels[0].max()
+        min_x, max_x = changed_pixels[1].min(), changed_pixels[1].max()
+        
+        # Add padding
+        width, height = current_image.size
+        min_x = max(0, min_x - padding)
+        min_y = max(0, min_y - padding)
+        max_x = min(width - 1, max_x + padding)
+        max_y = min(height - 1, max_y + padding)
+        
+        # Calculate dimensions
+        box_width = max_x - min_x + 1
+        box_height = max_y - min_y + 1
+        
+        # Ensure minimum box size
+        if box_width < min_box_size:
+            expand = (min_box_size - box_width) // 2
+            min_x = max(0, min_x - expand)
+            max_x = min(width - 1, max_x + expand)
+            box_width = max_x - min_x + 1
+            
+        if box_height < min_box_size:
+            expand = (min_box_size - box_height) // 2
+            min_y = max(0, min_y - expand)
+            max_y = min(height - 1, max_y + expand)
+            box_height = max_y - min_y + 1
+        
+        # Align to 8-pixel boundaries (required by some e-ink displays)
+        min_x = (min_x // 8) * 8
+        max_x = ((max_x // 8) + 1) * 8
+        box_width = min(max_x - min_x, width - min_x)
+        
+        region = {
+            "x": int(min_x),
+            "y": int(min_y),
+            "width": int(box_width),
+            "height": int(box_height)
+        }
+        
+        logger.debug(f"Changed region: {region}")
+        return [region]
     
     def _play_adhan(self, settings: Dict[str, Any]):
         """Play the adhan audio file."""
