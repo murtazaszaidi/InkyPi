@@ -62,7 +62,6 @@
 </div>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
     let map;
@@ -200,4 +199,15 @@
         // Initialize map after DOM is ready
         setTimeout(initMap, 100);
     });
+
+    // Load Leaflet library dynamically to avoid blocking
+    (function() {
+        const script = document.createElement('script');
+        script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+        script.async = true;
+        script.onerror = function() {
+            console.error('Failed to load Leaflet library');
+        };
+        document.head.appendChild(script);
+    })();
 </script>
