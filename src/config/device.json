@@ -1,6 +1,6 @@
 {
     "name": "InkyPi Development",
-    "display_type": "mock",
+    "display_type": "epd7in5_V2",
     "resolution": [
         800,
         480
@@ -22,7 +22,7 @@
                             "timezone": "America/Chicago",
                             "method": "0",
                             "enable_adhan": "false",
-                            "play_on_refresh": "false"
+                            "play_on_refresh": "true"
                         },
                         "refresh": {
                             "interval": 60
