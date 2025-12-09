@@ -6,33 +6,6 @@ and displays them on the InkyPi device.
 Uses praytimes library for offline prayer time calculations.
 The plugin supports custom location (latitude/longitude), calculation methods, and date selection.
 
-Partial Refresh Support:
-----------------------
-For Waveshare e-ink displays that support partial refresh (like epd7in5_V2), this plugin
-uses intelligent differential refresh to minimize screen flicker and wear.
-
-**Differential Refresh Algorithm:**
-The plugin compares each new image with the previous one pixel-by-pixel to detect exactly
-what changed. It then calculates the minimal bounding box(es) around changed content and
-only refreshes those specific regions.
-
-For example:
-- Time changes from "5:20 pm" to "5:21 pm": Only the "0→1" digit area refreshes
-- Prayer time becomes active: Only that specific row refreshes
-- Date changes at midnight: Full screen refresh for new prayer times
-
-**Benefits:**
-- Minimal flicker (only changed areas flash)
-- Faster updates (less data to transfer)
-- Extended display lifespan (fewer pixels refreshed per update)
-- Automatic adaptation to what actually changed
-
-**Fallback Configuration:**
-If differential detection fails or it's the first run, falls back to the region
-defined in plugin-info.json (default: left 240px column for vertical orientation).
-
-Note: Full refresh still occurs when the date changes to update all prayer times.
-
 Flow:
 
 1. Determine the date to use for prayer timings based on settings. (_determine_date)
@@ -59,8 +32,6 @@ class Azan(BasePlugin):
     _monitoring_thread = None
     _stop_monitoring = False
     _last_played_prayer = None
-    _last_date_displayed = None  # Track the last date we displayed
-    _previous_image = None  # Store previous image for differential refresh
 
     def generate_settings_template(self) -> Dict[str, Any]:
         template_params = super().generate_settings_template()
@@ -73,18 +44,6 @@ class Azan(BasePlugin):
         # Get the date to fetch prayer timings for
         date_to_fetch = self._determine_date(settings)
         logger.info(f"Azan plugin date to fetch: {date_to_fetch}")
-        
-        # Check if this is a new day (prayer times changed)
-        # If so, we need to force a full refresh to update the entire screen
-        date_changed = Azan._last_date_displayed != date_to_fetch
-        if date_changed:
-            logger.info(f"Date changed from {Azan._last_date_displayed} to {date_to_fetch}, forcing full refresh for new prayer times")
-            Azan._last_date_displayed = date_to_fetch
-            # Remove partial refresh setting temporarily to force full refresh
-            original_image_settings = self.config.get("image_settings", [])
-            self.config["image_settings"] = []  # Empty = full refresh
-        else:
-            original_image_settings = None  # No need to restore
 
         # Get coordinates, timezone, and method from settings
         latitude = float(settings.get("latitude", "29.7604"))  # Houston default
@@ -113,27 +72,6 @@ class Azan(BasePlugin):
 
         # Render the prayer timings as an image
         image = self._render_timings_image(timings_data, width, height, date_to_fetch)
-        
-        # Calculate differential refresh regions if we have a previous image
-        if not date_changed and Azan._previous_image is not None:
-            try:
-                changed_regions = self._detect_changed_regions(Azan._previous_image, image)
-                if changed_regions:
-                    logger.info(f"Detected {len(changed_regions)} changed region(s) for differential refresh")
-                    # Update image_settings with multiple partial refresh regions
-                    self.config["image_settings"] = [{"partial_refresh_regions": changed_regions}]
-                else:
-                    logger.info("No changes detected, skipping refresh")
-            except Exception as e:
-                logger.error(f"Error detecting changed regions: {e}", exc_info=True)
-                # Fall back to configured partial refresh
-        
-        # Store current image for next comparison
-        Azan._previous_image = image.copy()
-        
-        # Restore original image settings if we temporarily changed them
-        if original_image_settings is not None:
-            self.config["image_settings"] = original_image_settings
         
         return image
 

@@ -2,15 +2,5 @@
   "display_name": "Azan",
   "id": "azan",
   "class": "Azan",
-  "refresh_interval": 60,
-  "image_settings": [
-    {
-      "partial_refresh": {
-        "x": 0,
-        "y": 0,
-        "width": 240,
-        "height": 800
-      }
-    }
-  ]
+  "refresh_interval": 60
 }
