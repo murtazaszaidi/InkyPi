@@ -12,17 +12,34 @@
                 "name": "Default",
                 "start_time": "00:00",
                 "end_time": "24:00",
-                "plugins": [],
-                "current_plugin_index": null
+                "plugins": [
+                    {
+                        "plugin_id": "azan",
+                        "name": "Azan Display",
+                        "plugin_settings": {
+                            "latitude": "29.7604",
+                            "longitude": "-95.3698",
+                            "timezone": "America/Chicago",
+                            "method": "0",
+                            "enable_adhan": "false",
+                            "play_on_refresh": "false"
+                        },
+                        "refresh": true,
+                        "latest_refresh_time": "2025-12-09T16:12:31.871909-06:00"
+                    }
+                ],
+                "current_plugin_index": 0
             }
         ],
         "active_playlist": "Default"
     },
     "refresh_info": {
-        "refresh_time": "2025-12-09T15:03:14.371728-06:00",
-        "image_hash": "7e6dfa29e12ade0d358cc8b505286cb62f7809acd36178071319291f526f0a17",
-        "refresh_type": "Manual Update",
-        "plugin_id": "azan"
+        "refresh_time": "2025-12-09T16:12:31.871909-06:00",
+        "image_hash": "49e41f415af6c9a0516f71b56ad73132f10404d40724c39b4fa237c896ddff92",
+        "refresh_type": "Playlist",
+        "plugin_id": "azan",
+        "playlist": "Default",
+        "plugin_instance": "Azan Display"
     },
     "inverted_image": null,
     "log_system_stats": null,
