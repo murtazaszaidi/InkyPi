@@ -1,6 +1,38 @@
 {
     "name": "InkyPi Development",
     "display_type": "mock",
-    "resolution": [800, 480],
-    "orientation": "horizontal"
+    "resolution": [
+        800,
+        480
+    ],
+    "orientation": "vertical",
+    "playlist_config": {
+        "playlists": [
+            {
+                "name": "Default",
+                "start_time": "00:00",
+                "end_time": "24:00",
+                "plugins": [],
+                "current_plugin_index": null
+            }
+        ],
+        "active_playlist": "Default"
+    },
+    "refresh_info": {
+        "refresh_time": "2025-12-09T15:03:14.371728-06:00",
+        "image_hash": "7e6dfa29e12ade0d358cc8b505286cb62f7809acd36178071319291f526f0a17",
+        "refresh_type": "Manual Update",
+        "plugin_id": "azan"
+    },
+    "inverted_image": null,
+    "log_system_stats": null,
+    "timezone": "America/Chicago",
+    "time_format": "12h",
+    "plugin_cycle_interval_seconds": 60,
+    "image_settings": {
+        "saturation": 1.0,
+        "brightness": 1.0,
+        "sharpness": 1.0,
+        "contrast": 1.0
+    }
 }

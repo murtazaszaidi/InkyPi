@@ -1,0 +1,203 @@
+<span style="color: var(--text-primary);">Configure the location and calculation method for Islamic prayer times. Select a location on the map to set coordinates and timezone.</span>
+
+<div class="form-group">
+    <label for="map" class="form-label">Select Location</label>
+    <div id="map" style="height: 400px; width: 100%; border: 1px solid #ccc; border-radius: 4px;"></div>
+    <small style="color: var(--text-secondary);">Click on the map to set your location</small>
+</div>
+
+<div class="form-group">
+    <label for="location_display" class="form-label">Selected Location</label>
+    <input type="text" id="location_display" class="form-input" readonly placeholder="Click on map to select location" />
+</div>
+
+<input type="hidden" id="latitude" name="latitude" />
+<input type="hidden" id="longitude" name="longitude" />
+<input type="hidden" id="timezone" name="timezone" />
+
+<div class="form-group">
+    <label for="method" class="form-label">Calculation Method</label>
+    <select id="method" name="method" class="form-input">
+        <option value="0" selected>Shia Ithna-Ashari</option>
+        <option value="1">University of Islamic Sciences, Karachi</option>
+        <option value="2">Islamic Society of North America (ISNA)</option>
+        <option value="3">Muslim World League</option>
+        <option value="4">Umm Al-Qura University, Makkah</option>
+        <option value="5">Egyptian General Authority of Survey</option>
+        <option value="7">Institute of Geophysics, University of Tehran</option>
+        <option value="8">Gulf Region</option>
+        <option value="9">Kuwait</option>
+        <option value="10">Qatar</option>
+        <option value="11">Majlis Ugama Islam Singapura, Singapore</option>
+        <option value="12">Union Organization islamic de France</option>
+        <option value="13">Diyanet İşleri Başkanlığı, Turkey</option>
+        <option value="14">Spiritual Administration of Muslims of Russia</option>
+    </select>
+</div>
+
+<div class="form-group">
+    <label for="customDate" class="form-label">Date (optional)</label>
+    <input type="date" id="customDate" name="customDate" class="form-input" />
+    <small style="color: var(--text-secondary);">Leave blank for today's date</small>
+</div>
+
+<div class="form-group">
+    <label for="enable_adhan" class="form-label">Play Adhan at Prayer Times</label>
+    <div class="toggle-container">
+        <input type="checkbox" id="enable_adhan" name="enable_adhan" class="toggle-checkbox" value="false"
+            onclick="this.value = this.checked ? 'true' : 'false';">
+        <label for="enable_adhan" class="toggle-label"></label>
+    </div>
+    <small style="color: var(--text-secondary);">Automatically play adhan sound when prayer time arrives</small>
+</div>
+
+<div class="form-group">
+    <label for="play_on_refresh" class="form-label">Play Adhan on Refresh</label>
+    <div class="toggle-container">
+        <input type="checkbox" id="play_on_refresh" name="play_on_refresh" class="toggle-checkbox" value="false"
+            onclick="this.value = this.checked ? 'true' : 'false';">
+        <label for="play_on_refresh" class="toggle-label"></label>
+    </div>
+    <small style="color: var(--text-secondary);">Play adhan sound every time the display refreshes</small>
+</div>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+    let map;
+    let marker;
+
+    // Houston, Texas coordinates as default
+    const DEFAULT_LAT = 29.7604;
+    const DEFAULT_LNG = -95.3698;
+    const DEFAULT_TIMEZONE = 'America/Chicago';
+
+    // Function to get timezone from coordinates using backend endpoint
+    async function getTimezone(lat, lng) {
+        try {
+            const response = await fetch('/get_timezone', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    latitude: lat,
+                    longitude: lng
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error('Timezone lookup failed');
+            }
+            
+            const data = await response.json();
+            return data.timezone || DEFAULT_TIMEZONE;
+        } catch (error) {
+            console.error('Error fetching timezone:', error);
+            // Fallback: estimate timezone based on longitude
+            const offset = Math.round(lng / 15);
+            return `Etc/GMT${offset >= 0 ? '-' : '+'}${Math.abs(offset)}`;
+        }
+    }
+
+    // Function to update location display
+    function updateLocationDisplay(lat, lng, tz) {
+        document.getElementById('location_display').value = `${lat.toFixed(4)}°, ${lng.toFixed(4)}° (${tz})`;
+        document.getElementById('latitude').value = lat;
+        document.getElementById('longitude').value = lng;
+        document.getElementById('timezone').value = tz;
+    }
+
+    // Initialize map
+    function initMap() {
+        const $latitude = document.getElementById('latitude');
+        const $longitude = document.getElementById('longitude');
+        const $timezone = document.getElementById('timezone');
+
+        // Get initial coordinates from settings or use defaults
+        let initLat = parseFloat($latitude.value) || DEFAULT_LAT;
+        let initLng = parseFloat($longitude.value) || DEFAULT_LNG;
+        let initTz = $timezone.value || DEFAULT_TIMEZONE;
+
+        // Create map centered on initial location
+        map = L.map('map').setView([initLat, initLng], 10);
+
+        // Add OpenStreetMap tiles
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 19
+        }).addTo(map);
+
+        // Add marker at initial location
+        marker = L.marker([initLat, initLng], {
+            draggable: true
+        }).addTo(map);
+
+        // Update display with initial values
+        updateLocationDisplay(initLat, initLng, initTz);
+
+        // Handle map clicks
+        map.on('click', async function(e) {
+            const lat = e.latlng.lat;
+            const lng = e.latlng.lng;
+
+            // Move marker
+            marker.setLatLng([lat, lng]);
+
+            // Get timezone for this location
+            const tz = await getTimezone(lat, lng);
+
+            // Update hidden fields and display
+            updateLocationDisplay(lat, lng, tz);
+        });
+
+        // Handle marker drag
+        marker.on('dragend', async function(e) {
+            const position = marker.getLatLng();
+            const lat = position.lat;
+            const lng = position.lng;
+
+            // Get timezone for this location
+            const tz = await getTimezone(lat, lng);
+
+            // Update hidden fields and display
+            updateLocationDisplay(lat, lng, tz);
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const $latitude = document.getElementById('latitude');
+        const $longitude = document.getElementById('longitude');
+        const $timezone = document.getElementById('timezone');
+        const $method = document.getElementById('method');
+        const $date = document.getElementById('customDate');
+        const $enableAdhan = document.getElementById('enable_adhan');
+        const $playOnRefresh = document.getElementById('play_on_refresh');
+
+        if (loadPluginSettings) {
+            $latitude.value = pluginSettings.latitude || DEFAULT_LAT;
+            $longitude.value = pluginSettings.longitude || DEFAULT_LNG;
+            $timezone.value = pluginSettings.timezone || DEFAULT_TIMEZONE;
+            $method.value = pluginSettings.method || "0";
+            $date.value = pluginSettings.customDate || "";
+            $enableAdhan.checked = pluginSettings.enable_adhan === 'true';
+            $enableAdhan.value = pluginSettings.enable_adhan || "false";
+            $playOnRefresh.checked = pluginSettings.play_on_refresh === 'true';
+            $playOnRefresh.value = pluginSettings.play_on_refresh || "false";
+        } else {
+            $latitude.value = DEFAULT_LAT;
+            $longitude.value = DEFAULT_LNG;
+            $timezone.value = DEFAULT_TIMEZONE;
+            $method.value = "0";
+            $date.value = "";
+            $enableAdhan.checked = false;
+            $enableAdhan.value = "false";
+            $playOnRefresh.checked = false;
+            $playOnRefresh.value = "false";
+        }
+
+        // Initialize map after DOM is ready
+        setTimeout(initMap, 100);
+    });
+</script>
