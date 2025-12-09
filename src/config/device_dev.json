@@ -24,8 +24,10 @@
                             "enable_adhan": "false",
                             "play_on_refresh": "false"
                         },
-                        "refresh": true,
-                        "latest_refresh_time": "2025-12-09T16:12:31.871909-06:00"
+                        "refresh": {
+                            "interval": 60
+                        },
+                        "latest_refresh_time": "2025-12-09T16:28:33.610552-06:00"
                     }
                 ],
                 "current_plugin_index": 0
@@ -34,8 +36,8 @@
         "active_playlist": "Default"
     },
     "refresh_info": {
-        "refresh_time": "2025-12-09T16:12:31.871909-06:00",
-        "image_hash": "49e41f415af6c9a0516f71b56ad73132f10404d40724c39b4fa237c896ddff92",
+        "refresh_time": "2025-12-09T16:28:33.610552-06:00",
+        "image_hash": "6d0b38aba7ed374df940f830b554d68dae636bb064e5da17ada139323ddb5803",
         "refresh_type": "Playlist",
         "plugin_id": "azan",
         "playlist": "Default",

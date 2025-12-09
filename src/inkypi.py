@@ -87,6 +87,9 @@ if __name__ == '__main__':
     # start the background refresh task
     refresh_task.start()
 
+    # Trigger an immediate refresh on launch
+    refresh_task.signal_config_change()
+
     # display default inkypi image on startup
     if device_config.get_config("startup") is True:
         logger.info("Startup flag is set, displaying startup image")
