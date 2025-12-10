@@ -14,16 +14,15 @@ Flow:
 """
 
 from plugins.base_plugin.base_plugin import BasePlugin
-from PIL import Image, ImageDraw, ImageFont, ImageChops
+from PIL import Image, ImageDraw, ImageFont
 import logging
 import os
 import threading
 import subprocess
 from datetime import datetime, date, time, timedelta
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any
 import praytimes
 import pytz
-import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -304,84 +303,6 @@ class Azan(BasePlugin):
                 logger.error(f"Error in prayer monitoring thread: {str(e)}")
                 import time
                 time.sleep(10)
-    
-    def _detect_changed_regions(self, previous_image: Image.Image, current_image: Image.Image, 
-                                 min_box_size: int = 32, padding: int = 8) -> List[Dict[str, int]]:
-        """
-        Detect rectangular regions where pixels have changed between two images.
-        
-        Args:
-            previous_image: The previous rendered image
-            current_image: The current rendered image  
-            min_box_size: Minimum size for a bounding box (both width and height)
-            padding: Extra pixels to add around detected changes
-            
-        Returns:
-            List of dicts with keys: x, y, width, height
-        """
-        # Ensure images are the same size
-        if previous_image.size != current_image.size:
-            logger.warning("Image sizes don't match, cannot perform differential refresh")
-            return []
-        
-        # Convert to grayscale for comparison
-        prev_gray = previous_image.convert('L')
-        curr_gray = current_image.convert('L')
-        
-        # Calculate pixel difference
-        diff = ImageChops.difference(prev_gray, curr_gray)
-        
-        # Convert to numpy array for easier processing
-        diff_array = np.array(diff)
-        
-        # Find all pixels that changed (non-zero difference)
-        changed_pixels = np.where(diff_array > 0)
-        
-        if len(changed_pixels[0]) == 0:
-            return []  # No changes detected
-        
-        # Get bounding box of all changes
-        min_y, max_y = changed_pixels[0].min(), changed_pixels[0].max()
-        min_x, max_x = changed_pixels[1].min(), changed_pixels[1].max()
-        
-        # Add padding
-        width, height = current_image.size
-        min_x = max(0, min_x - padding)
-        min_y = max(0, min_y - padding)
-        max_x = min(width - 1, max_x + padding)
-        max_y = min(height - 1, max_y + padding)
-        
-        # Calculate dimensions
-        box_width = max_x - min_x + 1
-        box_height = max_y - min_y + 1
-        
-        # Ensure minimum box size
-        if box_width < min_box_size:
-            expand = (min_box_size - box_width) // 2
-            min_x = max(0, min_x - expand)
-            max_x = min(width - 1, max_x + expand)
-            box_width = max_x - min_x + 1
-            
-        if box_height < min_box_size:
-            expand = (min_box_size - box_height) // 2
-            min_y = max(0, min_y - expand)
-            max_y = min(height - 1, max_y + expand)
-            box_height = max_y - min_y + 1
-        
-        # Align to 8-pixel boundaries (required by some e-ink displays)
-        min_x = (min_x // 8) * 8
-        max_x = ((max_x // 8) + 1) * 8
-        box_width = min(max_x - min_x, width - min_x)
-        
-        region = {
-            "x": int(min_x),
-            "y": int(min_y),
-            "width": int(box_width),
-            "height": int(box_height)
-        }
-        
-        logger.debug(f"Changed region: {region}")
-        return [region]
     
     def _play_adhan(self, settings: Dict[str, Any]):
         """Play the adhan audio file."""
