@@ -227,16 +227,39 @@ class Azan(BasePlugin):
         # Extract timings
         timings = timings_data.get("timings", {})
         
-        # Current time display at the top (LEFT ALIGNED)
-        current_time = datetime.now().strftime("%I:%M %p").lower()
-        current_time = current_time.lstrip("0")  # Remove leading zero
+        # Current time display at the top (LEFT ALIGNED with fixed AM/PM position)
+        now_time = datetime.now()
+        time_digits = now_time.strftime("%I:%M").lstrip("0")  # Remove leading zero
+        am_pm = now_time.strftime("%p").lower()
         
         currentTimeLeftMargin = 30
         left_margin = 40
         time_y = 40
         
-        # Draw current time left aligned
-        draw.text((currentTimeLeftMargin, time_y), current_time, fill=(0, 0, 0), font=time_font)
+        # Draw current time digits (left aligned)
+        draw.text((currentTimeLeftMargin, time_y), time_digits, fill=(0, 0, 0), font=time_font)
+        
+        # Draw AM/PM in fixed position (always at same X coordinate)
+        # Calculate position: after "12:59" which is the widest time possible
+        try:
+            bbox = draw.textbbox((0, 0), "12:59", font=time_font)
+            max_time_width = bbox[2] - bbox[0]
+        except:
+            max_time_width = 280  # Fallback estimate
+        
+        # Position AM/PM at a fixed location with some spacing
+        am_pm_x = currentTimeLeftMargin + max_time_width + 20
+        try:
+            # Use smaller font for AM/PM
+            am_pm_font = ImageFont.truetype(alata_font_path, 50)
+        except:
+            try:
+                am_pm_font = ImageFont.truetype("/Library/Fonts/Arial.ttf", 50)
+            except:
+                am_pm_font = ImageFont.load_default()
+        
+        # Align AM/PM vertically with time (baseline alignment)
+        draw.text((am_pm_x, time_y + 40), am_pm, fill=(0, 0, 0), font=am_pm_font)
         
         # Prayer timings layout
         y_start = time_y + 180

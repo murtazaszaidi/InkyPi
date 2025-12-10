@@ -143,12 +143,26 @@ class WaveshareDisplay(AbstractDisplay):
                     logger.info(f"  Refreshing region: ({x},{y}) to ({x_end},{y_end}) [{width}x{height}px]")
                     
                     try:
-                        # Crop the image to the region for display_Partial
-                        # The Waveshare driver expects a buffer of just the region, not the full image
-                        cropped_region = image.crop((x, y, x_end, y_end))
-                        display_partial_method(self.epd_display.getbuffer(cropped_region), x, y, x_end, y_end)
+                        # Extract the partial region buffer correctly from the full image
+                        # The Waveshare driver's display_Partial has a bug where it reads from wrong indices
+                        full_buffer = self.epd_display.getbuffer(image)
+                        
+                        # Calculate the buffer slice for the partial region
+                        # Waveshare uses 1 bit per pixel, packed into bytes (8 pixels per byte)
+                        display_width_bytes = display_width // 8
+                        region_width_bytes = width // 8
+                        
+                        # Extract the correct portion of the buffer
+                        partial_buffer = bytearray()
+                        for row in range(y, y_end):
+                            row_start = row * display_width_bytes + (x // 8)
+                            row_end = row_start + region_width_bytes
+                            partial_buffer.extend(full_buffer[row_start:row_end])
+                        
+                        # Call display_Partial with the correctly extracted buffer
+                        display_partial_method(bytes(partial_buffer), x, y, x_end, y_end)
                     except Exception as e:
-                        logger.error(f"Error during partial refresh: {e}")
+                        logger.error(f"Error during partial refresh: {e}", exc_info=True)
                         # Fall back to full refresh on error
                         self.epd_display.Clear()
                         self.epd_display.display(self.epd_display.getbuffer(image))
