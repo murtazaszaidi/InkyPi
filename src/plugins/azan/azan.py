@@ -91,9 +91,17 @@ class Azan(BasePlugin):
         if Azan._previous_image is not None and not date_changed:
             try:
                 # Compare the rotated images (final form)
-                changed_regions = self._detect_changed_regions(Azan._previous_image, rotated_image)
+                # Use smaller padding (4px) and min box size (16px) for more precise updates
+                changed_regions = self._detect_changed_regions(
+                    Azan._previous_image, 
+                    rotated_image,
+                    min_box_size=16,
+                    padding=4
+                )
                 if changed_regions:
                     logger.info(f"Detected {len(changed_regions)} changed region(s) for differential refresh")
+                    for region in changed_regions:
+                        logger.info(f"  Region: ({region['x']},{region['y']}) size {region['width']}x{region['height']}")
                     # Override image_settings with detected regions
                     self.config["image_settings"] = [{"partial_refresh_regions": changed_regions}]
                 else:

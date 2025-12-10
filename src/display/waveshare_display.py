@@ -143,7 +143,10 @@ class WaveshareDisplay(AbstractDisplay):
                     logger.info(f"  Refreshing region: ({x},{y}) to ({x_end},{y_end}) [{width}x{height}px]")
                     
                     try:
-                        display_partial_method(self.epd_display.getbuffer(image), x, y, x_end, y_end)
+                        # Crop the image to the region for display_Partial
+                        # The Waveshare driver expects a buffer of just the region, not the full image
+                        cropped_region = image.crop((x, y, x_end, y_end))
+                        display_partial_method(self.epd_display.getbuffer(cropped_region), x, y, x_end, y_end)
                     except Exception as e:
                         logger.error(f"Error during partial refresh: {e}")
                         # Fall back to full refresh on error
