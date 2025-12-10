@@ -85,7 +85,7 @@ class WaveshareDisplay(AbstractDisplay):
     def display_image(self, image, image_settings=[]):
         
         """
-        Displays an image on the Waveshare display.
+        Displays an image on the Waveshare display with support for differential partial refresh.
 
         The image has been processed by adjusting orientation, resizing, and converting it
         into the buffer format required for e-paper rendering.
@@ -93,6 +93,7 @@ class WaveshareDisplay(AbstractDisplay):
         Args:
             image (PIL.Image): The image to be displayed.
             image_settings (list, optional): Additional settings to modify image rendering.
+                Can include 'partial_refresh_regions' with list of regions to refresh.
 
         Raises:
             ValueError: If no image is provided.
@@ -102,21 +103,63 @@ class WaveshareDisplay(AbstractDisplay):
         if not image:
             raise ValueError(f"No image provided.")
 
+        # Check for partial refresh regions (differential refresh)
+        partial_refresh_regions = None
+        for setting in image_settings:
+            if isinstance(setting, dict) and 'partial_refresh_regions' in setting:
+                partial_refresh_regions = setting['partial_refresh_regions']
+                break
+
         # Assume device was in sleep mode.
         self.epd_display_init()
 
-        # Clear residual pixels before updating the image.
-        self.epd_display.Clear()
+        # Check if display supports partial refresh
+        has_partial_refresh = hasattr(self.epd_display, 'display_Partial') or hasattr(self.epd_display, 'displayPartial')
 
-        # Display the image on the WS display.
-        if not self.bi_color_display:
-            self.epd_display.display(self.epd_display.getbuffer(image))
+        if partial_refresh_regions and has_partial_refresh:
+            # Differential partial refresh mode
+            display_partial_method = getattr(self.epd_display, 'display_Partial', getattr(self.epd_display, 'displayPartial', None))
+            
+            if display_partial_method:
+                logger.info(f"Performing differential partial refresh on {len(partial_refresh_regions)} region(s)")
+                
+                for region in partial_refresh_regions:
+                    x = region.get('x', 0)
+                    y = region.get('y', 0)
+                    width = region.get('width', self.epd_display.width)
+                    height = region.get('height', self.epd_display.height)
+                    
+                    x_end = x + width
+                    y_end = y + height
+                    
+                    logger.info(f"  Refreshing region: ({x},{y}) to ({x_end},{y_end}) [{width}x{height}px]")
+                    
+                    try:
+                        display_partial_method(self.epd_display.getbuffer(image), x, y, x_end, y_end)
+                    except Exception as e:
+                        logger.error(f"Error during partial refresh: {e}")
+                        # Fall back to full refresh on error
+                        self.epd_display.Clear()
+                        self.epd_display.display(self.epd_display.getbuffer(image))
+                        break
+            else:
+                logger.warning("Partial refresh not supported, falling back to full refresh")
+                self.epd_display.Clear()
+                self.epd_display.display(self.epd_display.getbuffer(image))
         else:
-            color_image = Image.new('1', image.size, 255)
-            self.epd_display.display(
-                self.epd_display.getbuffer(image),
-                self.epd_display.getbuffer(color_image)
-            )
+            # Full refresh mode
+            logger.info("Performing full refresh")
+            self.epd_display.Clear()
+
+            # Display the image on the WS display.
+            if not self.bi_color_display:
+                self.epd_display.display(self.epd_display.getbuffer(image))
+            else:
+                color_image = Image.new('1', image.size, 255)
+                self.epd_display.display(
+                    self.epd_display.getbuffer(image),
+                    self.epd_display.getbuffer(color_image)
+                )
 
         # Put device into low power mode (EPD displays maintain image when powered off)
         logger.info("Putting Waveshare display into sleep mode for power saving.")

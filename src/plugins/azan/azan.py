@@ -14,15 +14,16 @@ Flow:
 """
 
 from plugins.base_plugin.base_plugin import BasePlugin
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageChops
 import logging
 import os
 import threading
 import subprocess
 from datetime import datetime, date, time, timedelta
-from typing import Dict, Any
+from typing import Dict, Any, List
 import praytimes
 import pytz
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,8 @@ class Azan(BasePlugin):
     _monitoring_thread = None
     _stop_monitoring = False
     _last_played_prayer = None
+    _previous_image = None  # Store previous image for differential refresh
+    _last_date_displayed = None  # Track the last date for full refresh detection
 
     def generate_settings_template(self) -> Dict[str, Any]:
         template_params = super().generate_settings_template()
@@ -71,6 +74,32 @@ class Azan(BasePlugin):
 
         # Render the prayer timings as an image
         image = self._render_timings_image(timings_data, width, height, date_to_fetch)
+        
+        # Check if date changed - if so, force full refresh
+        date_changed = Azan._last_date_displayed != date_to_fetch
+        if date_changed:
+            logger.info(f"Date changed from {Azan._last_date_displayed} to {date_to_fetch}, forcing full refresh")
+            Azan._last_date_displayed = date_to_fetch
+            # Clear previous image to force full refresh
+            Azan._previous_image = None
+        
+        # Perform differential refresh if we have a previous image
+        if Azan._previous_image is not None and not date_changed:
+            try:
+                changed_regions = self._detect_changed_regions(Azan._previous_image, image)
+                if changed_regions:
+                    logger.info(f"Detected {len(changed_regions)} changed region(s) for differential refresh")
+                    # Override image_settings with detected regions
+                    self.config["image_settings"] = [{"partial_refresh_regions": changed_regions}]
+                else:
+                    logger.info("No pixel changes detected, skipping refresh entirely")
+                    # Return None or previous image to signal no refresh needed
+            except Exception as e:
+                logger.error(f"Error in differential refresh detection: {e}", exc_info=True)
+                # Fall back to configured partial refresh on error
+        
+        # Store current image for next comparison
+        Azan._previous_image = image.copy()
         
         return image
 
@@ -339,3 +368,85 @@ class Azan(BasePlugin):
             
         except Exception as e:
             logger.error(f"Error playing adhan: {str(e)}")
+    
+    def _detect_changed_regions(self, previous_image: Image.Image, current_image: Image.Image, 
+                                 min_box_size: int = 32, padding: int = 16) -> List[Dict[str, int]]:
+        """
+        Detect rectangular regions where pixels have changed between two images.
+        Optimized for Waveshare e-ink displays with minimal refresh areas.
+        
+        Args:
+            previous_image: The previous rendered image
+            current_image: The current rendered image  
+            min_box_size: Minimum size for a bounding box (both width and height)
+            padding: Extra pixels to add around detected changes for visual quality
+            
+        Returns:
+            List of dicts with keys: x, y, width, height representing changed regions
+        """
+        # Ensure images are the same size
+        if previous_image.size != current_image.size:
+            logger.warning("Image sizes don't match, cannot perform differential refresh")
+            return []
+        
+        # Convert to grayscale for comparison
+        prev_gray = previous_image.convert('L')
+        curr_gray = current_image.convert('L')
+        
+        # Calculate pixel difference
+        diff = ImageChops.difference(prev_gray, curr_gray)
+        
+        # Convert to numpy array for efficient processing
+        diff_array = np.array(diff)
+        
+        # Find all pixels that changed (non-zero difference)
+        changed_pixels = np.where(diff_array > 0)
+        
+        if len(changed_pixels[0]) == 0:
+            logger.debug("No pixel changes detected")
+            return []  # No changes detected
+        
+        # Get bounding box of all changes
+        min_y, max_y = int(changed_pixels[0].min()), int(changed_pixels[0].max())
+        min_x, max_x = int(changed_pixels[1].min()), int(changed_pixels[1].max())
+        
+        # Add padding around the changed region
+        width, height = current_image.size
+        min_x = max(0, min_x - padding)
+        min_y = max(0, min_y - padding)
+        max_x = min(width - 1, max_x + padding)
+        max_y = min(height - 1, max_y + padding)
+        
+        # Calculate dimensions
+        box_width = max_x - min_x + 1
+        box_height = max_y - min_y + 1
+        
+        # Ensure minimum box size for display compatibility
+        if box_width < min_box_size:
+            expand = (min_box_size - box_width) // 2
+            min_x = max(0, min_x - expand)
+            max_x = min(width - 1, min_x + min_box_size - 1)
+            box_width = max_x - min_x + 1
+            
+        if box_height < min_box_size:
+            expand = (min_box_size - box_height) // 2
+            min_y = max(0, min_y - expand)
+            max_y = min(height - 1, min_y + min_box_size - 1)
+            box_height = max_y - min_y + 1
+        
+        # Align X coordinates to 8-pixel boundaries (required by Waveshare displays)
+        min_x = (min_x // 8) * 8
+        # Adjust width to maintain coverage after alignment
+        box_width = min(((box_width + 7) // 8) * 8, width - min_x)
+        
+        region = {
+            "x": int(min_x),
+            "y": int(min_y),
+            "width": int(box_width),
+            "height": int(box_height)
+        }
+        
+        logger.debug(f"Changed region detected: x={region['x']}, y={region['y']}, " +
+                    f"width={region['width']}, height={region['height']}")
+        
+        return [region]
