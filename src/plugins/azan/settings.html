@@ -44,7 +44,7 @@
 <div class="form-group">
     <label for="enable_adhan" class="form-label">Play Adhan at Prayer Times</label>
     <div class="toggle-container">
-        <input type="checkbox" id="enable_adhan" name="enable_adhan" class="toggle-checkbox" value="false"
+        <input type="checkbox" id="enable_adhan" name="enable_adhan" class="toggle-checkbox" value="true" checked
             onclick="this.value = this.checked ? 'true' : 'false';">
         <label for="enable_adhan" class="toggle-label"></label>
     </div>
@@ -54,11 +54,11 @@
 <div class="form-group">
     <label for="play_on_refresh" class="form-label">Play Adhan on Refresh</label>
     <div class="toggle-container">
-        <input type="checkbox" id="play_on_refresh" name="play_on_refresh" class="toggle-checkbox" value="false"
+        <input type="checkbox" id="play_on_refresh" name="play_on_refresh" class="toggle-checkbox" value="true" checked
             onclick="this.value = this.checked ? 'true' : 'false';">
         <label for="play_on_refresh" class="toggle-label"></label>
     </div>
-    <small style="color: var(--text-secondary);">Play adhan sound every time the display refreshes</small>
+    <small style="color: var(--text-secondary);">Play adhan sound every time the display refreshes (including on startup)</small>
 </div>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />

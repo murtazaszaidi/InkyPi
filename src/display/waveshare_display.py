@@ -20,6 +20,10 @@ class WaveshareDisplay(AbstractDisplay):
 
     The module drivers are in display.waveshare_epd.
     """
+    
+    def __init__(self, device_config):
+        super().__init__(device_config)
+        self._last_refresh_mode = None  # Track if we're in 'partial' or 'full' mode
 
     def initialize_display(self):
         
@@ -110,11 +114,28 @@ class WaveshareDisplay(AbstractDisplay):
                 partial_refresh_regions = setting['partial_refresh_regions']
                 break
 
-        # Assume device was in sleep mode.
-        self.epd_display_init()
-
         # Check if display supports partial refresh
         has_partial_refresh = hasattr(self.epd_display, 'display_Partial') or hasattr(self.epd_display, 'displayPartial')
+
+        # Determine which mode we need
+        current_mode = 'partial' if (partial_refresh_regions and has_partial_refresh) else 'full'
+        
+        # Only re-initialize if mode changed or first time
+        if self._last_refresh_mode != current_mode:
+            if current_mode == 'partial':
+                # Use init_part() for faster partial refresh initialization
+                if hasattr(self.epd_display, 'init_part'):
+                    logger.info("Initializing display for fast partial refresh mode")
+                    self.epd_display.init_part()
+                else:
+                    self.epd_display_init()
+            else:
+                # Full refresh - use normal initialization
+                logger.info("Initializing display for full refresh mode")
+                self.epd_display_init()
+            self._last_refresh_mode = current_mode
+        else:
+            logger.debug(f"Display already in {current_mode} mode, skipping re-initialization")
 
         if partial_refresh_regions and has_partial_refresh:
             # Differential partial refresh mode
