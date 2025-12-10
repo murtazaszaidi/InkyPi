@@ -34,6 +34,7 @@ class Azan(BasePlugin):
     _last_played_prayer = None
     _previous_image = None  # Store previous image for differential refresh
     _last_date_displayed = None  # Track the last date for full refresh detection
+    _first_refresh_done = False  # Track if startup refresh has happened
 
     def generate_settings_template(self) -> Dict[str, Any]:
         template_params = super().generate_settings_template()
@@ -57,10 +58,11 @@ class Azan(BasePlugin):
         timings_data = self._calculate_prayer_timings(date_to_fetch, latitude, longitude, timezone_str, method)
         logger.info(f"Azan plugin timings calculated: {timings_data}")
 
-        # Play adhan on refresh if enabled
-        if settings.get("play_on_refresh", "false") == "true":
-            logger.info("Playing adhan on refresh")
+        # Play adhan on first refresh (startup) if enabled
+        if settings.get("play_on_refresh", "false") == "true" and not Azan._first_refresh_done:
+            logger.info("Playing adhan on startup")
             threading.Thread(target=self._play_adhan, args=(settings,), daemon=True).start()
+            Azan._first_refresh_done = True
 
         # Start monitoring thread if enabled and not already running
         if settings.get("enable_adhan", "false") == "true":
@@ -105,8 +107,7 @@ class Azan(BasePlugin):
                     # Override image_settings with detected regions
                     self.config["image_settings"] = [{"partial_refresh_regions": changed_regions}]
                 else:
-                    logger.info("No pixel changes detected, skipping refresh entirely")
-                    # Return None or previous image to signal no refresh needed
+                    logger.info("No pixel changes detected, but still refreshing for display update")
             except Exception as e:
                 logger.error(f"Error in differential refresh detection: {e}", exc_info=True)
                 # Fall back to configured partial refresh on error
@@ -386,18 +387,30 @@ class Azan(BasePlugin):
             
             logger.info(f"Playing adhan from: {adhan_file}")
             
+            # Set audio output to aux (headphone jack) at full volume on Raspberry Pi
+            try:
+                # Force audio to 3.5mm jack (aux output)
+                subprocess.run(["amixer", "cset", "numid=3", "1"], 
+                             capture_output=True, timeout=5)
+                # Set volume to 100%
+                subprocess.run(["amixer", "set", "PCM", "100%"], 
+                             capture_output=True, timeout=5)
+                logger.info("Audio output set to aux jack at 100% volume")
+            except (FileNotFoundError, subprocess.SubprocessError) as e:
+                logger.warning(f"Could not set audio output (may not be on Raspberry Pi): {e}")
+            
             # Use afplay on macOS or mpg123/ffplay on Linux to play audio
             try:
-                # Try macOS afplay first
-                subprocess.run(["afplay", adhan_file], check=True, timeout=300)
+                # Try macOS afplay first (with volume at max)
+                subprocess.run(["afplay", "-v", "1.0", adhan_file], check=True, timeout=300)
             except (FileNotFoundError, subprocess.SubprocessError):
                 try:
-                    # Try mpg123 on Linux
-                    subprocess.run(["mpg123", adhan_file], check=True, timeout=300)
+                    # Try mpg123 on Linux (with volume boost)
+                    subprocess.run(["mpg123", "-f", "32768", adhan_file], check=True, timeout=300)
                 except (FileNotFoundError, subprocess.SubprocessError):
                     try:
-                        # Try ffplay as fallback
-                        subprocess.run(["ffplay", "-nodisp", "-autoexit", adhan_file], 
+                        # Try ffplay as fallback (with volume at max)
+                        subprocess.run(["ffplay", "-nodisp", "-autoexit", "-volume", "100", adhan_file], 
                                      check=True, timeout=300)
                     except (FileNotFoundError, subprocess.SubprocessError) as e:
                         logger.error(f"No audio player found. Install afplay, mpg123, or ffplay: {e}")
