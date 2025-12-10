@@ -123,11 +123,31 @@ class WaveshareDisplay(AbstractDisplay):
             if display_partial_method:
                 logger.info(f"Performing differential partial refresh on {len(partial_refresh_regions)} region(s)")
                 
+                # Get display dimensions
+                display_width = self.epd_display.width
+                display_height = self.epd_display.height
+                
+                # Check if image was rotated for vertical orientation
+                image_width, image_height = image.size
+                is_rotated = (image_width != display_width) or (image_height != display_height)
+                
                 for region in partial_refresh_regions:
                     x = region.get('x', 0)
                     y = region.get('y', 0)
-                    width = region.get('width', self.epd_display.width)
-                    height = region.get('height', self.epd_display.height)
+                    width = region.get('width', display_width)
+                    height = region.get('height', display_height)
+                    
+                    # Transform coordinates if image was rotated 90 degrees
+                    # When rotated 90° counterclockwise: new_x = image_height - original_y - height, new_y = original_x
+                    if is_rotated and image_width < image_height:
+                        logger.info(f"  Original region (before rotation): ({x},{y}) [{width}x{height}px]")
+                        # Rotation transformation for 90° counterclockwise
+                        original_image_height = image_width  # Before rotation
+                        new_x = original_image_height - y - height
+                        new_y = x
+                        new_width = height
+                        new_height = width
+                        x, y, width, height = new_x, new_y, new_width, new_height
                     
                     x_end = x + width
                     y_end = y + height
