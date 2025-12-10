@@ -207,6 +207,10 @@ class WaveshareDisplay(AbstractDisplay):
                     self.epd_display.getbuffer(color_image)
                 )
 
-        # Put device into low power mode (EPD displays maintain image when powered off)
-        logger.info("Putting Waveshare display into sleep mode for power saving.")
-        self.epd_display.sleep()
+        # Only put device into deep sleep for full refresh mode
+        # For partial refresh mode, keep display awake for faster subsequent updates
+        if self._last_refresh_mode == 'full':
+            logger.info("Putting Waveshare display into deep sleep after full refresh")
+            self.epd_display.sleep()
+        else:
+            logger.debug("Keeping display awake for next partial refresh")

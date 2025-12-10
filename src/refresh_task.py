@@ -73,7 +73,18 @@ class RefreshTask:
         while True:
             try:
                 with self.condition:
-                    sleep_time = self.device_config.get_config("plugin_cycle_interval_seconds", default=60*60)
+                    plugin_cycle_interval = self.device_config.get_config("plugin_cycle_interval_seconds", default=60*60)
+                    
+                    # For intervals of 60 seconds or less, sync with the real-time clock
+                    # to ensure refreshes happen at the start of each minute
+                    if plugin_cycle_interval <= 60:
+                        current_dt = self._get_current_datetime()
+                        # Calculate seconds until next minute
+                        seconds_until_next_minute = 60 - current_dt.second
+                        sleep_time = seconds_until_next_minute
+                        logger.debug(f"Syncing with clock: waiting {sleep_time} seconds until next minute")
+                    else:
+                        sleep_time = plugin_cycle_interval
 
                     # Wait for sleep_time or until notified
                     self.condition.wait(timeout=sleep_time)
