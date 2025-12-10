@@ -83,10 +83,15 @@ class Azan(BasePlugin):
             # Clear previous image to force full refresh
             Azan._previous_image = None
         
+        # Simulate the rotation that will happen in display_manager to compare in final form
+        from utils.image_utils import change_orientation
+        rotated_image = change_orientation(image.copy(), device_config.get_config("orientation"))
+        
         # Perform differential refresh if we have a previous image
         if Azan._previous_image is not None and not date_changed:
             try:
-                changed_regions = self._detect_changed_regions(Azan._previous_image, image)
+                # Compare the rotated images (final form)
+                changed_regions = self._detect_changed_regions(Azan._previous_image, rotated_image)
                 if changed_regions:
                     logger.info(f"Detected {len(changed_regions)} changed region(s) for differential refresh")
                     # Override image_settings with detected regions
@@ -98,8 +103,8 @@ class Azan(BasePlugin):
                 logger.error(f"Error in differential refresh detection: {e}", exc_info=True)
                 # Fall back to configured partial refresh on error
         
-        # Store current image for next comparison
-        Azan._previous_image = image.copy()
+        # Store current rotated image for next comparison
+        Azan._previous_image = rotated_image.copy()
         
         return image
 
