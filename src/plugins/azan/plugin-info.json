@@ -1,0 +1,6 @@
+{
+  "display_name": "Azan",
+  "id": "azan",
+  "class": "Azan",
+  "refresh_interval": 60
+}

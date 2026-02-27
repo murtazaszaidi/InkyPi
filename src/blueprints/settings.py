@@ -79,6 +79,29 @@ def save_settings():
         return jsonify({"error": f"An error occurred: {str(e)}"}), 500
     return jsonify({"success": True, "message": "Saved settings."})
 
+@settings_bp.route('/get_timezone', methods=['POST'])
+def get_timezone():
+    """Get timezone for given latitude/longitude coordinates."""
+    try:
+        from timezonefinder import TimezoneFinder
+        data = request.get_json()
+        latitude = float(data.get('latitude'))
+        longitude = float(data.get('longitude'))
+        
+        tf = TimezoneFinder()
+        timezone = tf.timezone_at(lat=latitude, lng=longitude)
+        
+        if timezone:
+            return jsonify({"timezone": timezone})
+        else:
+            # Fallback to UTC-based estimation if not found
+            offset = round(longitude / 15)
+            timezone = f"Etc/GMT{'+' if offset <= 0 else '-'}{abs(offset)}"
+            return jsonify({"timezone": timezone})
+    except Exception as e:
+        logger.error(f"Error getting timezone: {e}")
+        return jsonify({"error": str(e)}), 500
+
 @settings_bp.route('/shutdown', methods=['POST'])
 def shutdown():
     data = request.get_json() or {}

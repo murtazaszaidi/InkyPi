@@ -27,7 +27,7 @@
                         "refresh": {
                             "interval": 60
                         },
-                        "latest_refresh_time": "2025-12-09T16:28:33.610552-06:00"
+                        "latest_refresh_time": "2025-12-09T16:38:34.081791-06:00"
                     }
                 ],
                 "current_plugin_index": 0
@@ -35,9 +35,9 @@
         ],
         "active_playlist": "Default"
     },
-    "refresh_info": {
-        "refresh_time": "2025-12-09T16:28:33.610552-06:00",
-        "image_hash": "6d0b38aba7ed374df940f830b554d68dae636bb064e5da17ada139323ddb5803",
+     "refresh_info": {
+        "refresh_time": "2025-12-09T16:39:34.129081-06:00",
+        "image_hash": "51d1d037beb956a22e4be5b6cfe15c8365d1ff366ccfe299d38e70043f6b0b03",
         "refresh_type": "Playlist",
         "plugin_id": "azan",
         "playlist": "Default",
